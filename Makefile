@@ -27,4 +27,4 @@ depends:
 		github.com/nytimes/gziphandler
 
 docker:
-	docker build --rm -t nobonobo/gophertank .
+	docker build --rm --no-cache -t nobonobo/gophertank .
