@@ -9,7 +9,7 @@ build:
 
 run:
 	-gopherjs serve --http localhost:8888 $(FRONT) &
-	go run ./main.go -dev=http://localhost:8888 -listen=:8000
+	go run ./main.go -dev=http://localhost:8888 -listen=:8080
 
 gopath:
 	@echo $(GOPATH)
@@ -25,3 +25,6 @@ depends:
 		github.com/lngramos/three \
 		github.com/vecty/vthree \
 		github.com/nytimes/gziphandler
+
+docker:
+	docker build --rm -t nobonobo/gophertank .
