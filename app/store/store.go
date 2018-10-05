@@ -10,7 +10,7 @@ import (
 
 const (
 	// MaxMembers ...
-	MaxMembers = 2
+	MaxMembers = 8
 )
 
 // Client ...

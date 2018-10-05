@@ -20,7 +20,7 @@ var (
 	localStorage = js.Global.Get("localStorage")
 )
 
-const DEBUG = false
+const DEBUG = true
 
 func main() {
 	if localStorage.Get("uuid") == js.Undefined {

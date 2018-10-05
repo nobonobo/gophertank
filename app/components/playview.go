@@ -2,6 +2,7 @@ package components
 
 import (
 	"log"
+	"math"
 	"time"
 
 	"github.com/gopherjs/gopherjs/js"
@@ -108,7 +109,7 @@ func (p *PlayView) init(renderer *three.WebGLRenderer) {
 	windowHeight := js.Global.Get("innerHeight").Float()
 	devicePixelRatio := js.Global.Get("devicePixelRatio").Float()
 
-	p.camera = three.NewPerspectiveCamera(75, windowWidth/windowHeight, 0.1, 1000)
+	p.camera = three.NewPerspectiveCamera(75, windowWidth/windowHeight, 0.5, 1000)
 	p.camera.Position.Set(0.0, 0.5, 1.0)
 
 	js.Global.Call("addEventListener", "resize", p.onResize)
@@ -171,31 +172,74 @@ func (p *PlayView) init(renderer *three.WebGLRenderer) {
 				}
 			})
 			p.person = p.mouse.Call("getObject")
-			p.person.Call("translateZ", 3)
+			p.person.Call("translateZ", 5)
 			p.scene.Call("add", p.person)
 		}
 		// Begin animating.
 		p.animate()
 	})
 
-	light := three.NewDirectionalLight(three.NewColor(126, 255, 255), 0.5)
-	light.Position.Set(256, 256, 256).Normalize()
+	light := three.NewDirectionalLight(three.NewColor(255, 255, 255), 0.8)
+	//light.Position.Set(256, 256, 256).Normalize()
 	p.scene.Add(light)
 
 	p.renderer.SetPixelRatio(devicePixelRatio)
 	p.renderer.SetSize(windowWidth, windowHeight, true)
 
-	loader := js.Global.Get("THREE").Get("CubeTextureLoader").New()
-	envMap := loader.Call("load", js.S{
-		"textures/cube/skybox/px.jpg", // right
-		"textures/cube/skybox/nx.jpg", // left
-		"textures/cube/skybox/py.jpg", // top
-		"textures/cube/skybox/ny.jpg", // bottom
-		"textures/cube/skybox/pz.jpg", // back
-		"textures/cube/skybox/nz.jpg", // front
-	})
-	envMap.Set("format", js.Global.Get("THREE").Get("RGBFormat"))
-	p.scene.Set("background", envMap)
+	loader := js.Global.Get("THREE").Get("TextureLoader").New()
+	waterGeometry := js.Global.Get("THREE").Get("PlaneBufferGeometry").New(10000, 10000)
+	water := js.Global.Get("THREE").Get("Water").New(
+		waterGeometry,
+		js.M{
+			"textureWidth":  512,
+			"textureHeight": 512,
+			"waterNormals": loader.Call(
+				"load", "textures/waternormals.jpg",
+				func(texture *js.Object) {
+					texture.Set("wrapS", js.Global.Get("THREE").Get("RepeatWrapping"))
+					texture.Set("wrapT", js.Global.Get("THREE").Get("RepeatWrapping"))
+				},
+			),
+			"alpha":           1.0,
+			"sunDirection":    light.Get("position").Call("clone").Call("normalize"),
+			"sunColor":        0xffffff,
+			"waterColor":      0x001e0f,
+			"distortionScale": 3.7,
+			"fog":             p.scene.Get("fog") != js.Undefined,
+		},
+	)
+	water.Get("rotation").Set("x", -math.Pi/2)
+	p.scene.Call("add", water)
+
+	//===========
+	sky := js.Global.Get("THREE").Get("Sky").New()
+	sky.Get("scale").Call("setScalar", 10000)
+	p.scene.Call("add", sky)
+	uniforms := sky.Get("material").Get("uniforms")
+	uniforms.Get("turbidity").Set("value", 10)
+	uniforms.Get("rayleigh").Set("value", 2)
+	uniforms.Get("luminance").Set("value", 1)
+	uniforms.Get("mieCoefficient").Set("value", 0.005)
+	uniforms.Get("mieDirectionalG").Set("value", 0.8)
+	var parameters = js.M{
+		"distance":    400.0,
+		"inclination": 0.49,
+		"azimuth":     0.205,
+	}
+	cubeCamera := js.Global.Get("THREE").Get("CubeCamera").New(1, 20000, 256)
+	cubeCamera.Get("renderTarget").Get("texture").Set(
+		"minFilter", js.Global.Get("THREE").Get("LinearMipMapLinearFilter"))
+	updateSun := func() {
+		theta := math.Pi * (parameters["inclination"].(float64) - 0.5)
+		phi := 2 * math.Pi * (parameters["azimuth"].(float64) - 0.5)
+		light.Get("position").Set("x", parameters["distance"].(float64)*math.Cos(phi))
+		light.Get("position").Set("y", parameters["distance"].(float64)*math.Sin(phi)*math.Sin(theta))
+		light.Get("position").Set("z", parameters["distance"].(float64)*math.Sin(phi)*math.Cos(theta))
+		sky.Get("material").Get("uniforms").Get("sunPosition").Set("value", light.Get("position").Call("copy", light.Get("position")))
+		water.Get("material").Get("uniforms").Get("sunDirection").Get("value").Call("copy", light.Get("position")).Call("normalize")
+		cubeCamera.Call("update", renderer.Object, p.scene.Object)
+	}
+	updateSun()
 
 	// Create cube
 	geometry := three.NewBoxGeometry(&three.BoxGeometryParameters{
